@@ -38,6 +38,7 @@ PistonEngineSimulator::~PistonEngineSimulator() {
 
 void PistonEngineSimulator::loadSimulation(Engine *engine, Vehicle *vehicle, Transmission *transmission) {
     Simulator::loadSimulation(engine, vehicle, transmission);
+    setSimulationFrequency(static_cast<int>(engine->getSimulationFrequency()));
 
     m_engine = engine;
     m_vehicle = vehicle;
@@ -223,11 +224,12 @@ void PistonEngineSimulator::placeAndInitialize() {
             + exhaust->getLength();
         const double speedOfSound = 343.0 * units::m / units::sec;
         const double delay = exhaustLength / speedOfSound;
-        m_delayFilters[i].initialize(delay, 10000.0);
+        m_delayFilters[i].initialize(delay, getSimulationFrequency());
     }
 
     m_engine->getIgnitionModule()->reset();
 
+    m_delayFrequency = getSimulationFrequency();
     m_exhaustFlowStagingBuffer = new double[m_engine->getExhaustSystemCount()];
 }
 
@@ -391,6 +393,10 @@ void PistonEngineSimulator::writeToSynthesizer() {
             head->getHeaderPrimaryLength(piston->getCylinderIndex())
             + exhaust->getLength();
 
+        if (m_delayFrequency != getSimulationFrequency()) {
+            m_delayFilters[i].initialize(exhaustLength / (343.0 * units::m / units::sec), getSimulationFrequency());
+        }
+
         double exhaustFlow =
             attenuation_3 * 1600 * (
                 1.0 * (chamber->m_exhaustRunnerAndPrimary.pressure() - units::pressure(1.0, units::atm))
@@ -399,15 +405,20 @@ void PistonEngineSimulator::writeToSynthesizer() {
 
         lastValveLift[i] = head->exhaustValveLift(piston->getCylinderIndex());
 
+        const double induction = attenuation_3 * 1600 * 0.15
+            * (1.0 - m_engine->getThrottle())
+            * (chamber->m_intakeRunnerAndManifold.pressure() - units::pressure(1.0, units::atm));
+
         const double delayedExhaustPulse =
             m_delayFilters[i].fast_f(exhaustFlow);
 
         ExhaustSystem *exhaustSystem = head->getExhaustSystem(piston->getCylinderIndex());
         m_exhaustFlowStagingBuffer[exhaustSystem->getIndex()] +=
             head->getSoundAttenuation(piston->getCylinderIndex())
-            * (exhaustSystem->getAudioVolume() * delayedExhaustPulse / cylinderCount)
+            * (exhaustSystem->getAudioVolume() * (delayedExhaustPulse + induction) / cylinderCount)
             * (1 / (exhaustLength * exhaustLength));
     }
 
+    m_delayFrequency = getSimulationFrequency();
     synthesizer().writeInput(m_exhaustFlowStagingBuffer);
 }

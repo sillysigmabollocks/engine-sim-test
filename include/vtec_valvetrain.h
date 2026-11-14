@@ -2,6 +2,7 @@
 #define ATG_ENGINE_SIM_VTEC_STANDARD_VALVETRAIN_H
 
 #include "valvetrain.h"
+#include <vector>
 
 class Engine;
 class VtecValvetrain : public Valvetrain {
@@ -11,6 +12,7 @@ public:
         double minSpeed;
         double manifoldVacuum;
         double minThrottlePosition;
+        double maxIntakeAdvance = 0.0;
 
         Camshaft *intakeCamshaft;
         Camshaft *exhaustCamshaft;
@@ -34,7 +36,14 @@ public:
     virtual Camshaft *getActiveExhaustCamshaft() override;
 
 private:
-    bool isVtecEnabled() const;
+    bool isVtecEnabled();
+    void updateIntakeAdvance();
+    std::vector<bool> m_intakeHigh;
+    std::vector<bool> m_exhaustHigh;
+    bool m_liftRequested = false;
+    double m_maxIntakeAdvance = 0.0;
+    double m_lowBaseAdvance = 0.0;
+    double m_highBaseAdvance = 0.0;
 
     Camshaft *m_intakeCamshaft;
     Camshaft *m_exhaustCamshaft;

@@ -49,6 +49,7 @@ class PistonEngineSimulator : public Simulator {
 
     protected:
         DelayFilter *m_delayFilters;
+        int m_delayFrequency = 0;
 
         atg_scs::FixedPositionConstraint *m_crankConstraints;
         atg_scs::ClutchConstraint *m_crankshaftLinks;

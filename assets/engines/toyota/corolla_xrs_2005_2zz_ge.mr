@@ -119,6 +119,7 @@ private node xrs_head {
             exhaust_camshaft: exhaust_low,
             vtec_intake_camshaft: intake_high,
             vtec_exhaust_camshaft: exhaust_high,
+            max_intake_advance: 25 * units.deg,
             min_rpm: lift_rpm,
             min_throttle_position: 0.25,
             manifold_vacuum: 0.70 * units.atm,

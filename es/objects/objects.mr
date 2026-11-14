@@ -350,6 +350,7 @@ public node vtec_valvetrain => __engine_sim__vtec_valvetrain {
     input intake_camshaft [camshaft];
     input exhaust_camshaft [camshaft];
 
+    input max_intake_advance [float]: 0 * units.deg;
     input min_rpm [float]: 5800 * units.rpm;
     input min_speed [float]: 10 * units.mph;
     input manifold_vacuum [float]: 1.0 * units.atm - 5.0 * units.inHg;

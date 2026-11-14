@@ -35,6 +35,7 @@ namespace es_script {
             params.exhaustCamshaft = exhaustCam;
             params.vtecIntakeCamshaft = vtecIntakeCam;
             params.vtexExhaustCamshaft = vtecExhaustCam;
+            params.maxIntakeAdvance = m_parameters.maxIntakeAdvance;
             params.minRpm = m_parameters.minRpm;
             params.minSpeed = m_parameters.minSpeed;
             params.minThrottlePosition = m_parameters.minThrottlePosition;
@@ -52,6 +53,7 @@ namespace es_script {
             addInput("intake_camshaft", &m_intakeCamshaft, InputTarget::Type::Object);
             addInput("exhaust_camshaft", &m_exhaustCamshaft, InputTarget::Type::Object);
 
+            addInput("max_intake_advance", &m_parameters.maxIntakeAdvance);
             addInput("min_rpm", &m_parameters.minRpm);
             addInput("min_speed", &m_parameters.minSpeed);
             addInput("manifold_vacuum", &m_parameters.manifoldVacuum);
