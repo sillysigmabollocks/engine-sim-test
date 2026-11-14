@@ -1,0 +1,331 @@
+// 2005 Toyota Corolla XRS (North America), naturally aspirated 2ZZ-GE.
+// Copy to assets/engines/toyota/ and load its main() from assets/main.mr.
+// Toyota's 2005 manual/brochure give 82 x 85 mm, 1796 cc and 11.5:1.
+// Reference output: 170 hp at 7,600 rpm and 127 lb-ft at 4,400 rpm.
+// Flow, spark, inertia, and exhaust values below are simulation estimates.
+// Valve lift and timing ranges reference Toyota SAE paper 2000-01-0671.
+
+import "engine_sim.mr"
+
+units units()
+constants constants()
+impulse_response_library ir_library()
+
+label cylinder_1_fire(0 * units.deg)
+label cylinder_3_fire(180 * units.deg)
+label cylinder_4_fire(360 * units.deg)
+label cylinder_2_fire(540 * units.deg)
+label overlap_tdc(360 * units.deg)
+
+private node xrs_wires {
+    output cylinder_1: ignition_wire();
+    output cylinder_2: ignition_wire();
+    output cylinder_3: ignition_wire();
+    output cylinder_4: ignition_wire();
+}
+
+private node xrs_cam {
+    input profile;
+    input centerline;
+    alias output __out: cam;
+
+    camshaft cam(
+        camshaft_parameters(advance: 0 * units.deg, base_radius: 17 * units.mm),
+        lobe_profile: profile
+    )
+
+    // Cam indices follow cylinder order, while offsets follow firing order.
+    cam
+        .add_lobe(centerline + cylinder_1_fire)
+        .add_lobe(centerline + cylinder_2_fire)
+        .add_lobe(centerline + cylinder_3_fire)
+        .add_lobe(centerline + cylinder_4_fire)
+}
+
+private node xrs_head {
+    input clearance_volume;
+    input lift_rpm;
+    alias output __out: head;
+
+    // Toyota's published lifts with effective 0.050-in durations tuned
+    // for the simulator's harmonic profiles. These durations and the
+    // centerlines below are simulation settings, not stock cam measurements.
+    harmonic_cam_lobe low_intake(
+        duration_at_50_thou: 184 * units.deg,
+        gamma: 0.65,
+        lift: 7.6 * units.mm
+    )
+    harmonic_cam_lobe low_exhaust(
+        duration_at_50_thou: 184 * units.deg,
+        gamma: 0.65,
+        lift: 7.6 * units.mm
+    )
+    harmonic_cam_lobe high_intake(
+        duration_at_50_thou: 225 * units.deg,
+        gamma: 0.65,
+        lift: 11.2 * units.mm
+    )
+    harmonic_cam_lobe high_exhaust(
+        duration_at_50_thou: 205 * units.deg,
+        gamma: 0.65,
+        lift: 10.0 * units.mm
+    )
+
+    // Two representative intake phases approximate continuous VVT-i.
+    xrs_cam intake_low(low_intake, centerline: overlap_tdc + 122 * units.deg)
+    xrs_cam exhaust_low(low_exhaust, centerline: overlap_tdc - 100 * units.deg)
+    xrs_cam intake_high(high_intake, centerline: overlap_tdc + 105 * units.deg)
+    xrs_cam exhaust_high(high_exhaust, centerline: overlap_tdc - 112 * units.deg)
+
+    // Estimated port flow in CFM at 28 in H2O. Lift inputs are in thou.
+    function intake_flow(50 * units.thou)
+    intake_flow
+        .add_flow_sample(0, 0)
+        .add_flow_sample(50, 43)
+        .add_flow_sample(100, 83)
+        .add_flow_sample(150, 121)
+        .add_flow_sample(200, 153)
+        .add_flow_sample(250, 179)
+        .add_flow_sample(300, 196)
+        .add_flow_sample(350, 211)
+        .add_flow_sample(400, 222)
+        .add_flow_sample(450, 230)
+
+    function exhaust_flow(50 * units.thou)
+    exhaust_flow
+        .add_flow_sample(0, 0)
+        .add_flow_sample(50, 34)
+        .add_flow_sample(100, 67)
+        .add_flow_sample(150, 94)
+        .add_flow_sample(200, 117)
+        .add_flow_sample(250, 135)
+        .add_flow_sample(300, 148)
+        .add_flow_sample(350, 156)
+        .add_flow_sample(400, 162)
+        .add_flow_sample(450, 165)
+
+    generic_cylinder_head head(
+        // With zero deck clearance and zero piston displacement in the model,
+        // the head input represents all clearance volume at compression TDC.
+        chamber_volume: clearance_volume,
+        intake_runner_volume: 110 * units.cc,
+        intake_runner_cross_section_area: 8.8 * units.cm2,
+        exhaust_runner_volume: 55 * units.cc,
+        exhaust_runner_cross_section_area: 7.2 * units.cm2,
+        intake_port_flow: intake_flow,
+        exhaust_port_flow: exhaust_flow,
+        valvetrain: vtec_valvetrain(
+            intake_camshaft: intake_low,
+            exhaust_camshaft: exhaust_low,
+            vtec_intake_camshaft: intake_high,
+            vtec_exhaust_camshaft: exhaust_high,
+            min_rpm: lift_rpm,
+            min_throttle_position: 0.25,
+            manifold_vacuum: 0.70 * units.atm,
+            min_speed: 0 * units.mph
+        )
+    )
+}
+
+public node corolla_xrs_2005_2zz_ge {
+    input lift_rpm: 6000 * units.rpm;
+    input limiter_rpm: 8200 * units.rpm;
+    alias output __out: engine;
+
+    label bore(82 * units.mm)
+    label stroke(85 * units.mm)
+    label compression_ratio(11.5)
+    label swept_volume(constants.pi * bore * bore * stroke / 4)
+    label clearance_volume(swept_volume / (compression_ratio - 1))
+
+    // Component mass and inertia estimates for stock-like rev response.
+    label rod_length(137.9 * units.mm)
+    label rod_mass(450 * units.g)
+    label compression_height(31.2 * units.mm)
+    label crank_mass(12.5 * units.kg)
+    label flywheel_mass(7.0 * units.kg)
+    label flywheel_radius(133 * units.mm)
+    label crank_inertia(disk_moment_of_inertia(mass: crank_mass, radius: 56 * units.mm))
+    label flywheel_inertia(disk_moment_of_inertia(mass: flywheel_mass, radius: flywheel_radius))
+
+    engine engine(
+        name: "2005 Toyota Corolla XRS - 2ZZ-GE",
+        starter_torque: 75 * units.lb_ft,
+        starter_speed: 450 * units.rpm,
+        redline: limiter_rpm,
+        throttle_gamma: 1.7,
+        hf_gain: 0.01,
+        noise: 0.35,
+        jitter: 0.15,
+        simulation_frequency: 20000
+    )
+
+    crankshaft crank(
+        throw: stroke / 2,
+        mass: crank_mass,
+        flywheel_mass: flywheel_mass,
+        friction_torque: 4 * units.lb_ft,
+        moment_of_inertia: crank_inertia + flywheel_inertia + 0.018,
+        tdc: 90 * units.deg
+    )
+
+    rod_journal journal_1(angle: 0 * units.deg)
+    rod_journal journal_2(angle: 180 * units.deg)
+    rod_journal journal_3(angle: 180 * units.deg)
+    rod_journal journal_4(angle: 0 * units.deg)
+    crank
+        .add_rod_journal(journal_1)
+        .add_rod_journal(journal_2)
+        .add_rod_journal(journal_3)
+        .add_rod_journal(journal_4)
+
+    piston_parameters pistons(
+        mass: 365 * units.g,
+        compression_height: compression_height,
+        wrist_pin_position: 0.0,
+        displacement: 0.0
+    )
+
+    connecting_rod_parameters rods(
+        mass: rod_mass,
+        length: rod_length,
+        center_of_mass: 0.0,
+        moment_of_inertia: rod_moment_of_inertia(mass: rod_mass, length: rod_length)
+    )
+
+    intake manifold(
+        plenum_volume: 1.65 * units.L,
+        plenum_cross_section_area: 25 * units.cm2,
+        intake_flow_rate: k_carb(450),
+        runner_flow_rate: k_carb(195),
+        runner_length: 250 * units.mm,
+        idle_flow_rate: k_carb(0),
+        idle_throttle_plate_position: 0.9978,
+        velocity_decay: 0.7
+    )
+
+    // One collector, slightly unequal primaries, and the bundled muffled IR.
+    exhaust_system_parameters exhaust_params(
+        collector_cross_section_area: circle_area(26 * units.mm),
+        outlet_flow_rate: k_carb(650),
+        primary_tube_length: 235 * units.mm,
+        primary_flow_rate: k_carb(240),
+        velocity_decay: 1.0
+    )
+
+    exhaust_system exhaust(
+        exhaust_params,
+        length: 1.9 * units.m,
+        audio_volume: 0.6,
+        impulse_response: ir_library.mild_exhaust_0
+    )
+
+    xrs_wires wires()
+
+    cylinder_bank bank(
+        cylinder_bank_parameters(
+            bore: bore,
+            deck_height: stroke / 2 + rod_length + compression_height
+        ),
+        angle: 0 * units.deg
+    )
+
+    bank
+        .add_cylinder(
+            piston: piston(pistons, blowby: k_28inH2O(0.001)),
+            connecting_rod: connecting_rod(rods),
+            rod_journal: journal_1,
+            intake: manifold,
+            exhaust_system: exhaust,
+            ignition_wire: wires.cylinder_1,
+            primary_length: 45 * units.mm
+        )
+        .add_cylinder(
+            piston: piston(pistons, blowby: k_28inH2O(0.001)),
+            connecting_rod: connecting_rod(rods),
+            rod_journal: journal_2,
+            intake: manifold,
+            exhaust_system: exhaust,
+            ignition_wire: wires.cylinder_2,
+            primary_length: 10 * units.mm
+        )
+        .add_cylinder(
+            piston: piston(pistons, blowby: k_28inH2O(0.001)),
+            connecting_rod: connecting_rod(rods),
+            rod_journal: journal_3,
+            intake: manifold,
+            exhaust_system: exhaust,
+            ignition_wire: wires.cylinder_3,
+            primary_length: 20 * units.mm
+        )
+        .add_cylinder(
+            piston: piston(pistons, blowby: k_28inH2O(0.001)),
+            connecting_rod: connecting_rod(rods),
+            rod_journal: journal_4,
+            intake: manifold,
+            exhaust_system: exhaust,
+            ignition_wire: wires.cylinder_4,
+            primary_length: 60 * units.mm
+        )
+        .set_cylinder_head(xrs_head(clearance_volume: clearance_volume, lift_rpm: lift_rpm))
+
+    // The sim only accepts an RPM-based spark curve. These are estimates.
+    function spark_advance(1000 * units.rpm)
+    spark_advance
+        .add_sample(0 * units.rpm, 9 * units.deg)
+        .add_sample(1000 * units.rpm, 13 * units.deg)
+        .add_sample(2000 * units.rpm, 20 * units.deg)
+        .add_sample(3000 * units.rpm, 25 * units.deg)
+        .add_sample(4000 * units.rpm, 28 * units.deg)
+        .add_sample(5000 * units.rpm, 30 * units.deg)
+        .add_sample(6000 * units.rpm, 28 * units.deg)
+        .add_sample(7000 * units.rpm, 27 * units.deg)
+        .add_sample(8000 * units.rpm, 29 * units.deg)
+        .add_sample(9000 * units.rpm, 29 * units.deg)
+
+    ignition_module ignition(
+        timing_curve: spark_advance,
+        rev_limit: limiter_rpm,
+        limiter_duration: 0.075 * units.sec
+    )
+    ignition
+        .connect_wire(wires.cylinder_1, cylinder_1_fire)
+        .connect_wire(wires.cylinder_3, cylinder_3_fire)
+        .connect_wire(wires.cylinder_4, cylinder_4_fire)
+        .connect_wire(wires.cylinder_2, cylinder_2_fire)
+
+    engine
+        .add_crankshaft(crank)
+        .add_cylinder_bank(bank)
+        .add_ignition_module(ignition)
+}
+
+private node xrs_vehicle {
+    alias output __out:
+        vehicle(
+            mass: 2670 * units.lb,
+            diff_ratio: 4.529,
+            // Nominal 195/55R16 radius, before tire deflection.
+            tire_radius: 310.45 * units.mm,
+            drag_coefficient: 0.30,
+            cross_sectional_area: 2.10 * units.m * units.m,
+            rolling_resistance: 145 * units.N
+        );
+}
+
+private node xrs_c60 {
+    alias output __out:
+        transmission(max_clutch_torque: 210 * units.lb_ft)
+            .add_gear(3.166)
+            .add_gear(2.050)
+            .add_gear(1.481)
+            .add_gear(1.166)
+            .add_gear(0.916)
+            .add_gear(0.725);
+}
+
+public node main {
+    set_engine(corolla_xrs_2005_2zz_ge())
+    set_vehicle(xrs_vehicle())
+    set_transmission(xrs_c60())
+}
